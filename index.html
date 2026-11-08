@@ -309,6 +309,15 @@
     if (mixed) add(45,'r','mixes Latin with Cyrillic/Greek letters that look the same ('+uhost+')');
     else if (hasIDN && nonAscii) add(15,'o','uses non-English letters ('+uhost+')');
 
+    if (!res.official && /[^\x00-\x7f]/.test(uhost)) {
+      var skFull = deLeet(skeleton(uhost));
+      outer2: for (var bb in OFFICIAL) for (var ii=0; ii<OFFICIAL[bb].length; ii++) {
+        if (skFull === OFFICIAL[bb][ii] || endsWithDomain(skFull, OFFICIAL[bb][ii])) {
+          res.brand = {brand:bb, real:OFFICIAL[bb][ii]}; res.exactCopy = true;
+          add(50,'r','looks exactly like '+OFFICIAL[bb][ii]+' but uses look-alike letters. it is a different, fake address'); break outer2;
+        }
+      }
+    }
     if (!res.official) {
       // brand impersonation (check skeleton of unicode host so look-alike letters are caught)
       var ownPart = uhost.length > reg.suffix.length + 1 ? uhost.slice(0, uhost.length - reg.suffix.length - 1) : uhost;
@@ -336,6 +345,7 @@
         }
         if (found) break;
       }
+      if (res.exactCopy) found = null;
       if (found && how === 'weak') {
         var hw = sk.split(/[^a-z0-9]+/), fl = sk.replace(/[.\-_]/g,'');
         if (KEYWORDS.some(function(w){ return hw.indexOf(w)>=0 || (w.length>=5 && fl.indexOf(w)>=0); })) how = 'name';
@@ -491,7 +501,9 @@
       return {cls:'v-red', title:'REPORTED AS SCAM', sub:'community blocklists report this domain. not confirmed by PhishDestroy yet, but treat it as dangerous.'};
     }
     if (a.dns && a.dns.blocked) return {cls:'v-red', title:'BLOCKED AS MALICIOUS', sub:'Cloudflare\'s malware filter blocks this site. do not open it.'};
+    if (age && age.notRegistered && a.score >= 60) return {cls:'v-red', title:'FAKE LOOK-ALIKE', sub:'this address copies a real brand with look-alike tricks. this exact name isn\'t registered right now, but any link like this is a scam.'};
     if (age && age.notRegistered) return {cls:'v-grey', title:'DOMAIN DOES NOT EXIST', sub:'nobody has registered this name yet, so the link leads nowhere'+(a.score>=25?'. but it is built like a scam name, so someone may register it soon.':'. check it for typos.')};
+    if (age && age.unsupported && a.dns && a.dns.nxdomain && !a.official && a.score >= 60) return {cls:'v-red', title:'FAKE LOOK-ALIKE', sub:'this address copies a real brand with look-alike tricks. it doesn\'t point to a site right now, but any link like this is a scam.'};
     if (age && age.unsupported && a.dns && a.dns.nxdomain && !a.official) return {cls:'v-grey', title:'DOMAIN DOES NOT EXIST', sub:'this name does not point to any website right now'+(a.score>=25?'. but it is built like a scam name.':'. check it for typos.')};
     if (a.score >= 60) return {cls:'v-red', title:'LIKELY SCAM', sub:'not in the database yet, but it has the classic signs of a scam link.'};
     if (a.shortener) return {cls:'v-orange', title:'HIDDEN DESTINATION', sub:'this is a short link, so nobody can see where it really goes until it opens.'};
@@ -599,7 +611,7 @@
         scan.style.display = 'none';
         var head = '';
         if (results.length > 1) {
-          var bad = results.filter(function(r){ return r.a.verdict && /SCAM|BLOCKED/.test(r.a.verdict); }).length;
+          var bad = results.filter(function(r){ return r.a.verdict && /SCAM|BLOCKED|FAKE/.test(r.a.verdict); }).length;
           var sus = results.filter(function(r){ return r.a.verdict && /SUSPICIOUS|HIDDEN|ANYONE|CONFLICTING/.test(r.a.verdict); }).length;
           head = '<div class="summary">found ' + results.length + ' links: <b style="color:var(--r)">' + bad + ' dangerous</b>, <b style="color:var(--o)">' + sus + ' suspicious</b>, ' + (results.length - bad - sus) + ' other</div>';
         }
